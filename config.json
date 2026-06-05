@@ -1,0 +1,18 @@
+{
+    "listen": "0.0.0.0",
+    "port": 8080,
+    "poll_interval": 30,
+    "access_id": "YOUR_ACCESS_ID",
+    "access_secret": "YOUR_ACCESS_SECRET",
+    "region": "eu",
+    "devices": [
+        {
+            "id": "DEVICE_ID",
+            "ip": "192.168.1.100",
+            "local_key": "YOUR_LOCAL_KEY16",
+            "name": "My Device",
+            "version": "3.4",
+            "encrypt": true
+        }
+    ]
+}

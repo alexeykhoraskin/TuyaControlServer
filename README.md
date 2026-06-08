@@ -167,6 +167,7 @@ List all devices with connection mode and online status.
             "ip": "192.168.1.12",
             "name": "LightNew",
             "mode": "v2",
+            "ir": false,
             "online": true,
             "error": ""
         }
@@ -217,6 +218,33 @@ Health check.
 
 ```json
 {"status": "running"}
+```
+
+### `GET /devices/{id}/keys`
+
+List available IR keys for an infrared device.
+
+```json
+{
+    "keys": [
+        {"key_name": "Power", "key_id": "1"},
+        {"key_name": "Volume+", "key_id": "50"}
+    ]
+}
+```
+
+### `GET /devices/{id}/commands`
+
+List all available commands with type info and value hints (works for IR and DPS devices).
+
+```json
+{
+    "commands": [
+        {"name": "switch_led", "type": "Boolean", "values": "true/false"},
+        {"name": "bright_value", "type": "Integer", "values": "0-1000"},
+        {"name": "work_mode", "type": "Enum"}
+    ]
+}
 ```
 
 ## IR Control Hub

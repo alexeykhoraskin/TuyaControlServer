@@ -81,7 +81,9 @@ void ControlServer::server_loop() {
             std::string resp;
 
             // Route
-            if (req.find("GET /devices") != std::string::npos) {
+            if (req.find("GET /devices") != std::string::npos &&
+                req.find("/ir-keys") == std::string::npos &&
+                req.find("/commands") == std::string::npos) {
                 resp = RESP_OK;
                 auto devices = mgr_->list_devices();
                 std::string json = "{\"devices\":[";
@@ -95,11 +97,65 @@ void ControlServer::server_loop() {
                             "\"mode\":\"" + (d->mode == ConnMode::LOCAL_V34 ? "v3.4" :
                                              d->mode == ConnMode::LOCAL_V2 ? "v2" :
                                              d->mode == ConnMode::CLOUD ? "cloud" : "none") + "\","
+                            "\"ir\":" + (d->info.is_infrared() ? "true" : "false") + ","
                             "\"online\":" + (d->info.online ? "true" : "false") + ","
                             "\"error\":\"" + d->error + "\"}";
                 }
                 json += "]}";
                 resp += json;
+            }
+            else if (req.find("GET /devices/") != std::string::npos &&
+                     req.find("/commands") != std::string::npos) {
+                // GET /devices/{id}/commands
+                auto start = req.find("GET /devices/") + 13;
+                auto slash = req.find("/commands", start);
+                auto id = req.substr(start, slash - start);
+
+                auto cmds = mgr_->list_commands(id);
+                if (!cmds.empty()) {
+                    std::string json = RESP_OK;
+                    json += "{\"commands\":[";
+                    bool first = true;
+                    for (auto& c : cmds) {
+                        if (!first) json += ",";
+                        first = false;
+                        json += "{\"name\":\"" + c.name + "\"";
+                        if (!c.type.empty())
+                            json += ",\"type\":\"" + c.type + "\"";
+                        if (!c.values.empty())
+                            json += ",\"values\":\"" + c.values + "\"";
+                        if (!c.extra.empty())
+                            json += ",\"extra\":\"" + c.extra + "\"";
+                        json += "}";
+                    }
+                    json += "]}";
+                    resp = json;
+                } else {
+                    resp = RESP_NOTFOUND;
+                }
+            }
+            else if (req.find("GET /devices/") != std::string::npos &&
+                     req.find("/ir-keys") != std::string::npos) {
+                // GET /devices/{id}/ir-keys
+                auto start = req.find("GET /devices/") + 13;
+                auto slash = req.find("/ir-keys", start);
+                auto id = req.substr(start, slash - start);
+
+                auto keys = mgr_->list_ir_keys(id);
+                if (keys) {
+                    std::string json = RESP_OK;
+                    json += "{\"keys\":[";
+                    bool first = true;
+                    for (auto& [k, v] : *keys) {
+                        if (!first) json += ",";
+                        first = false;
+                        json += "{\"key_name\":\"" + k + "\",\"key_id\":\"" + v + "\"}";
+                    }
+                    json += "]}";
+                    resp = json;
+                } else {
+                    resp = RESP_NOTFOUND;
+                }
             }
             else if (req.find("GET /devices/") != std::string::npos) {
                 // Extract device ID from path

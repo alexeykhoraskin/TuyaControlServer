@@ -27,6 +27,11 @@ public:
                          int remote_index,
                          const std::string& key);
 
+    // List available infrared keys for a remote
+    std::optional<std::vector<std::pair<std::string, std::string>>>
+    list_ir_keys(const std::string& hub_device_id,
+                 const std::string& remote_id);
+
     // Query device status → returns DPS map
     std::optional<DpsMap> query_status(const std::string& device_id);
 
@@ -39,9 +44,18 @@ public:
     // Fetch single device details (local_key, ip, status codes) from cloud
     std::optional<DeviceInfo> fetch_device_details(const std::string& device_id);
 
+    // Fetch device specification (function codes with types & ranges)
+    bool fetch_device_specs(const std::string& device_id);
+
     // Update cached status codes for a device (called periodically)
     void update_cached_codes(const std::string& device_id,
                               const std::vector<std::string>& codes);
+
+    // Get cached status codes for a device
+    std::vector<std::string> get_cached_codes(const std::string& device_id);
+
+    // Get cached command info (richer than codes) for a device
+    std::vector<CommandInfo> get_cached_commands(const std::string& device_id);
 
 private:
     CloudConfig config_;
@@ -50,6 +64,7 @@ private:
     int         expire_s_ = 0;
     int64_t     acquire_time_ = 0;  // seconds since epoch
     std::map<std::string, std::vector<std::string>> status_code_cache_;
+    std::map<std::string, std::vector<CommandInfo>> command_cache_;
     std::mutex cache_mtx_;
 
     std::string sign_request(const std::string& method,

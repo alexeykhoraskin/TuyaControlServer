@@ -89,6 +89,39 @@ std::optional<DpsMap> DeviceManager::query_status(const std::string& id) {
     return std::nullopt;
 }
 
+std::optional<std::vector<std::pair<std::string, std::string>>>
+DeviceManager::list_ir_keys(const std::string& id) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    auto it = devices_.find(id);
+    if (it == devices_.end()) return std::nullopt;
+    auto& dev = it->second;
+    if (!dev->state->info.is_infrared() || !cloud_api_ || !cloud_api_->valid())
+        return std::nullopt;
+    return cloud_api_->list_ir_keys(dev->state->info.ir_hub_id, dev->state->info.id);
+}
+
+std::vector<CommandInfo> DeviceManager::list_commands(const std::string& id) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    auto it = devices_.find(id);
+    if (it == devices_.end()) return {};
+    auto& dev = it->second;
+    if (!cloud_api_) return {};
+    if (dev->state->info.is_infrared()) {
+        auto keys = cloud_api_->list_ir_keys(dev->state->info.ir_hub_id, dev->state->info.id);
+        if (!keys) return {};
+        std::vector<CommandInfo> cmds;
+        for (auto& [k, v] : *keys)
+            cmds.push_back({k, "ir_key", "", v});
+        return cmds;
+    }
+    auto cmds = cloud_api_->get_cached_commands(id);
+    if (cmds.empty()) {
+        cloud_api_->fetch_device_specs(id);
+        cmds = cloud_api_->get_cached_commands(id);
+    }
+    return cmds;
+}
+
 bool DeviceManager::send_command(const std::string& id, const DpsMap& dps) {
     auto it = devices_.find(id);
     if (it == devices_.end()) return false;

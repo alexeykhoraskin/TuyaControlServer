@@ -74,6 +74,14 @@ enum class ConnMode {
     CLOUD
 };
 
+// ── Command info for listing available commands ──
+struct CommandInfo {
+    std::string name;       // code/function name
+    std::string type;       // "Boolean", "Integer", "Enum", "String", "ir_key"
+    std::string values;     // human-readable values: "true/false", "0-1000", "white|colour|..."
+    std::string extra;      // key_id for IR, other context
+};
+
 // ── Device status ──
 using DpsMap = std::map<std::string, std::any>;
 

@@ -344,6 +344,67 @@ static std::string json_str(const std::string& json, const std::string& key) {
     return json_unescape((end == std::string::npos) ? json.substr(pos) : json.substr(pos, end - pos));
 }
 
+static std::string json_int(const std::string& json, const std::string& key) {
+    auto pos = json.find("\"" + key + "\"");
+    if (pos == std::string::npos) return "";
+    pos = json.find(':', pos + key.size() + 2);
+    if (pos == std::string::npos) return "";
+    pos++;
+    while (pos < json.size() && json[pos] == ' ') pos++;
+    auto end = json.find_first_of(",}", pos);
+    return json.substr(pos, end - pos);
+}
+
+std::optional<std::vector<std::pair<std::string, std::string>>>
+CloudApi::list_ir_keys(const std::string& hub_device_id,
+                        const std::string& remote_id) {
+    if (is_token_expired() && !refresh_token()) return std::nullopt;
+
+    auto path = "/v2.0/infrareds/" + hub_device_id + "/remotes/" + remote_id + "/keys";
+    auto resp = do_request("GET", path, "", true);
+
+    std::vector<std::pair<std::string, std::string>> keys;
+    // result is an object containing key_list array
+    auto res_start = resp.find("\"result\":{");
+    if (res_start == std::string::npos) {
+        res_start = resp.find("\"result\": {");
+        if (res_start == std::string::npos) return keys;
+    }
+    // find key_list array within result
+    auto kl_start = resp.find("\"key_list\":[", res_start);
+    if (kl_start == std::string::npos) {
+        kl_start = resp.find("\"key_list\": [", res_start);
+        if (kl_start == std::string::npos) return keys;
+    }
+    size_t pos = resp.find('[', kl_start);
+    if (pos == std::string::npos) return keys;
+    pos++;
+
+    while (pos < resp.size()) {
+        while (pos < resp.size() && (resp[pos]==' '||resp[pos]=='\n'||resp[pos]=='\r'||resp[pos]=='\t'))
+            pos++;
+        if (pos >= resp.size() || resp[pos] == ']') break;
+        if (resp[pos] == '{') {
+            int depth = 1;
+            size_t obj_start = pos++;
+            while (pos < resp.size() && depth > 0) {
+                if (resp[pos] == '{') depth++;
+                else if (resp[pos] == '}') depth--;
+                pos++;
+            }
+            std::string obj = resp.substr(obj_start, pos - obj_start);
+            std::string name = json_str(obj, "key");
+            if (name.empty()) name = json_str(obj, "key_name");
+            std::string kid   = json_int(obj, "key_id");
+            if (!name.empty())
+                keys.emplace_back(name, kid);
+        } else {
+            pos++;
+        }
+    }
+    return keys;
+}
+
 static std::vector<DeviceInfo> parse_device_list(const std::string& resp) {
     std::vector<DeviceInfo> devices;
 
@@ -459,10 +520,100 @@ std::optional<DeviceInfo> CloudApi::fetch_device_details(const std::string& devi
     return di;
 }
 
+// ── Parse specification functions into CommandInfo ──
 void CloudApi::update_cached_codes(const std::string& device_id,
                                     const std::vector<std::string>& codes) {
     std::lock_guard<std::mutex> lock(cache_mtx_);
     status_code_cache_[device_id] = codes;
+}
+
+std::vector<std::string> CloudApi::get_cached_codes(const std::string& device_id) {
+    std::lock_guard<std::mutex> lock(cache_mtx_);
+    auto it = status_code_cache_.find(device_id);
+    if (it != status_code_cache_.end()) return it->second;
+    return {};
+}
+
+std::vector<CommandInfo> CloudApi::get_cached_commands(const std::string& device_id) {
+    std::lock_guard<std::mutex> lock(cache_mtx_);
+    auto it = command_cache_.find(device_id);
+    if (it != command_cache_.end()) return it->second;
+    return {};
+}
+
+bool CloudApi::fetch_device_specs(const std::string& device_id) {
+    auto info = fetch_device_details(device_id);
+    if (!info) return false;
+
+    // Infer types from status values in the device detail response
+    auto path = "/v1.0/devices/" + device_id;
+    auto resp = do_request("GET", path, "", true);
+    auto res_start = resp.find("\"result\":{");
+    if (res_start == std::string::npos) return false;
+    int depth = 1;
+    size_t pos2 = res_start + 9;
+    while (pos2 < resp.size() && depth > 0) {
+        if (resp[pos2] == '{') depth++;
+        else if (resp[pos2] == '}') depth--;
+        pos2++;
+    }
+    std::string obj = resp.substr(res_start + 9, pos2 - res_start - 9 - 1);
+
+    // Parse status array, inferring types from values
+    std::vector<CommandInfo> cmds;
+    auto arr_start = obj.find("\"status\":[");
+    if (arr_start == std::string::npos) return false;
+    size_t p = obj.find('[', arr_start) + 1;
+
+    while (p < obj.size()) {
+        while (p < obj.size() && (obj[p]==' '||obj[p]=='\n'||obj[p]=='\r'||obj[p]=='\t')) p++;
+        if (p >= obj.size() || obj[p] == ']') break;
+        if (obj[p] == '{') {
+            depth = 1;
+            size_t ost = p++;
+            while (p < obj.size() && depth > 0) {
+                if (obj[p] == '{') depth++;
+                else if (obj[p] == '}') depth--;
+                p++;
+            }
+            std::string o = obj.substr(ost, p - ost);
+            CommandInfo ci;
+            ci.name = json_str(o, "code");
+
+            // Infer type from value
+            auto vp = o.find("\"value\":");
+            if (vp != std::string::npos) {
+                vp += 8;
+                while (vp < o.size() && o[vp] == ' ') vp++;
+                if (vp < o.size()) {
+                    if (o.substr(vp, 4) == "true" || o.substr(vp, 5) == "false") {
+                        ci.type = "Boolean";
+                        ci.values = "true/false";
+                    } else if (o[vp] == '"') {
+                        ci.type = "Enum";
+                    } else if (o[vp] == '{' || o[vp] == '[') {
+                        ci.type = "String";
+                    } else {
+                        ci.type = "Integer";
+                    }
+                }
+            }
+            // Add value hints for known codes
+            if (ci.name == "bright_value" || ci.name == "temp_value")
+                ci.values = "0-1000";
+            else if (ci.name == "countdown")
+                ci.values = "0-86400";
+
+            if (!ci.name.empty())
+                cmds.push_back(ci);
+        } else p++;
+    }
+
+    if (!cmds.empty()) {
+        std::lock_guard<std::mutex> lock(cache_mtx_);
+        command_cache_[device_id] = cmds;
+    }
+    return !cmds.empty();
 }
 
 } // namespace tuya

@@ -40,6 +40,13 @@ public:
     // Send command
     bool send_command(const std::string& id, const DpsMap& dps);
 
+    // List IR keys for an infrared device
+    std::optional<std::vector<std::pair<std::string, std::string>>>
+    list_ir_keys(const std::string& id);
+
+    // List all available commands for a device (IR keys or DPS codes)
+    std::vector<CommandInfo> list_commands(const std::string& id);
+
     // Start background polling
     void start_polling(int interval_s);
 

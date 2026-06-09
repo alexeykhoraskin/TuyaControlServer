@@ -319,8 +319,9 @@ The `mcp-tuya-py/` directory contains an **MCP (Model Context Protocol) server**
 
 ```bash
 cd mcp-tuya-py
-pip install -r requirements.txt
-python server.py --server http://localhost:8080
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python server.py --server http://localhost:8080
 ```
 
 ### Available tools

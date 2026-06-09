@@ -9,8 +9,9 @@ Provides AI agents with tools to discover, query, and control
 Tuya/Smart Life devices through a running TuyaControlServer instance.
 
 Usage:
-    pip install -r requirements.txt
-    python server.py [--server http://localhost:8080]
+    python3 -m venv .venv
+    .venv/bin/pip install -r requirements.txt
+    .venv/bin/python server.py [--server http://localhost:8080]
 """
 
 import argparse
@@ -167,7 +168,7 @@ def _make_server() -> Server:
             result = await _post(f"/devices/{dev['id']}/command", body)
             if result.get("success"):
                 return [TextContent(type="text", text="OK")]
-            return [TextContent(type="text", text="Failed")]
+            return [TextContent(type="text", text=f"Failed: {result}")]
 
         if name == "list_commands":
             dev_name = args["name"]

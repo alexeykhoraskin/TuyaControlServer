@@ -281,14 +281,59 @@ bool CloudApi::send_ir_command(const std::string& hub_device_id,
                                 const std::string& key) {
     if (is_token_expired() && !refresh_token()) return false;
 
-    std::string json = "{\"categoryId\":" + std::to_string(category_id) +
-                       ",\"remoteIndex\":" + std::to_string(remote_index) +
-                       ",\"key\":\"" + key + "\"}";
+    auto keys_opt = list_ir_keys(hub_device_id, remote_id);
+    bool is_standard = false;
+    int key_id = 0;
+    if (keys_opt) {
+        for (auto& k : *keys_opt) {
+            if (k.key == key) {
+                is_standard = k.standard;
+                key_id = k.key_id;
+                break;
+            }
+        }
+    }
 
-    auto path = "/v2.0/infrareds/" + hub_device_id + "/remotes/" + remote_id + "/command";
-    auto resp = do_request("POST", path, json, true);
+    // Try the preferred endpoint, then fall back to the other
+    std::string base = "/v2.0/infrareds/" + hub_device_id + "/remotes/" + remote_id;
 
-    return resp.find("\"success\":true") != std::string::npos;
+    // First attempt: preferred endpoint
+    std::string path1 = base + (is_standard ? "/command" : "/raw/command");
+    std::string body1;
+    if (is_standard) {
+        body1 = "{\"categoryId\":" + std::to_string(category_id) +
+                ",\"remoteIndex\":" + std::to_string(remote_index) +
+                ",\"key\":\"" + key + "\"}";
+    } else if (key_id != 0) {
+        body1 = "{\"categoryId\":" + std::to_string(category_id) +
+                ",\"remoteIndex\":" + std::to_string(remote_index) +
+                ",\"key_id\":" + std::to_string(key_id) + "}";
+    } else {
+        return false;
+    }
+
+    auto resp1 = do_request("POST", path1, body1, true);
+    if (resp1.find("\"success\":true") != std::string::npos) return true;
+
+    // Fallback: try the other endpoint if we have the data for it
+    if (is_standard && key_id != 0) {
+        // Standard failed → try raw with key_id
+        std::string body2 = "{\"categoryId\":" + std::to_string(category_id) +
+                            ",\"remoteIndex\":" + std::to_string(remote_index) +
+                            ",\"key_id\":" + std::to_string(key_id) + "}";
+        auto resp2 = do_request("POST", base + "/raw/command", body2, true);
+        return resp2.find("\"success\":true") != std::string::npos;
+    }
+    if (!is_standard) {
+        // Raw failed → try standard with key name
+        std::string body2 = "{\"categoryId\":" + std::to_string(category_id) +
+                            ",\"remoteIndex\":" + std::to_string(remote_index) +
+                            ",\"key\":\"" + key + "\"}";
+        auto resp2 = do_request("POST", base + "/command", body2, true);
+        return resp2.find("\"success\":true") != std::string::npos;
+    }
+
+    return false;
 }
 
 // ── Minimal JSON helpers (shared with config.cpp style) ──
@@ -355,7 +400,7 @@ static std::string json_int(const std::string& json, const std::string& key) {
     return json.substr(pos, end - pos);
 }
 
-std::optional<std::vector<std::pair<std::string, std::string>>>
+std::optional<std::vector<IrKeyInfo>>
 CloudApi::list_ir_keys(const std::string& hub_device_id,
                         const std::string& remote_id) {
     if (is_token_expired() && !refresh_token()) return std::nullopt;
@@ -363,14 +408,12 @@ CloudApi::list_ir_keys(const std::string& hub_device_id,
     auto path = "/v2.0/infrareds/" + hub_device_id + "/remotes/" + remote_id + "/keys";
     auto resp = do_request("GET", path, "", true);
 
-    std::vector<std::pair<std::string, std::string>> keys;
-    // result is an object containing key_list array
+    std::vector<IrKeyInfo> keys;
     auto res_start = resp.find("\"result\":{");
     if (res_start == std::string::npos) {
         res_start = resp.find("\"result\": {");
         if (res_start == std::string::npos) return keys;
     }
-    // find key_list array within result
     auto kl_start = resp.find("\"key_list\":[", res_start);
     if (kl_start == std::string::npos) {
         kl_start = resp.find("\"key_list\": [", res_start);
@@ -393,11 +436,15 @@ CloudApi::list_ir_keys(const std::string& hub_device_id,
                 pos++;
             }
             std::string obj = resp.substr(obj_start, pos - obj_start);
-            std::string name = json_str(obj, "key");
-            if (name.empty()) name = json_str(obj, "key_name");
-            std::string kid   = json_int(obj, "key_id");
-            if (!name.empty())
-                keys.emplace_back(name, kid);
+            IrKeyInfo k;
+            k.key = json_str(obj, "key");
+            if (k.key.empty()) k.key = json_str(obj, "key_name");
+            auto kid_str = json_int(obj, "key_id");
+            if (!kid_str.empty()) k.key_id = std::stoi(kid_str);
+            auto std_str = json_int(obj, "standard_key");
+            k.standard = (std_str == "1" || std_str == "true");
+            if (!k.key.empty())
+                keys.push_back(k);
         } else {
             pos++;
         }

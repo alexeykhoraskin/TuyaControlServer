@@ -79,17 +79,25 @@ std::optional<DpsMap> DeviceManager::query_status(const std::string& id) {
     auto it = devices_.find(id);
     if (it == devices_.end()) return std::nullopt;
     auto& dev = it->second;
+    std::optional<DpsMap> result;
     if (!dev->state->cloud_only && dev->local && dev->local->is_connected()) {
-        auto dps = dev->local->query_status();
-        if (dps) return dps;
-        // Local failed — fall through to cloud
+        result = dev->local->query_status();
+        if (result) {
+            std::lock_guard<std::mutex> lock(dev->state->mtx);
+            dev->state->dps = *result;
+            return result;
+        }
     }
     if (cloud_api_ && cloud_api_->valid())
-        return cloud_api_->query_status(id);
-    return std::nullopt;
+        result = cloud_api_->query_status(id);
+    if (result) {
+        std::lock_guard<std::mutex> lock(dev->state->mtx);
+        dev->state->dps = *result;
+    }
+    return result;
 }
 
-std::optional<std::vector<std::pair<std::string, std::string>>>
+std::optional<std::vector<IrKeyInfo>>
 DeviceManager::list_ir_keys(const std::string& id) {
     std::lock_guard<std::mutex> lock(mtx_);
     auto it = devices_.find(id);
@@ -110,8 +118,8 @@ std::vector<CommandInfo> DeviceManager::list_commands(const std::string& id) {
         auto keys = cloud_api_->list_ir_keys(dev->state->info.ir_hub_id, dev->state->info.id);
         if (!keys) return {};
         std::vector<CommandInfo> cmds;
-        for (auto& [k, v] : *keys)
-            cmds.push_back({k, "ir_key", "", v});
+        for (auto& ki : *keys)
+            cmds.push_back({ki.key, "ir_key", (ki.standard ? "standard" : "raw"), std::to_string(ki.key_id)});
         return cmds;
     }
     auto cmds = cloud_api_->get_cached_commands(id);

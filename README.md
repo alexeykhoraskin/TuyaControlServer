@@ -75,7 +75,10 @@ cmake -S . -B build
 cmake --build build -j$(nproc)
 ```
 
-Produces `build/tuya_control_server` and `build/fetch_devices` (helper tool).
+Produces:
+- `build/tuya_control_server` — main HTTP server
+- `build/fetch_devices` — cloud device lister helper
+- `build/cli/tuya_cli` — CLI client for querying and controlling devices
 
 ## Configuration
 
@@ -247,6 +250,67 @@ List all available commands with type info and value hints (works for IR and DPS
 }
 ```
 
+## CLI client
+
+The `tuya_cli` executable provides a command-line interface to query and control devices through a running `tuya_control_server` instance.
+
+### Usage
+
+```bash
+tuya_cli [options] <command> [args]
+
+Options:
+  -s, --server URL  Server URL (default: http://localhost:8080)
+  -h, --help        Show help
+
+Commands:
+  devices, list                    List all devices
+  keys <name>                      List commands for a device
+
+Device commands (auto-detect IR vs DPS):
+  <device_name>                    Show device status with DPS values
+  <device_name> <key>              Send IR key to device
+  <device_name> <dps> <value>      Send DPS command
+```
+
+### Examples
+
+```bash
+# List all devices
+tuya_cli list
+
+# Show TH1 temperature/humidity status
+tuya_cli TH1
+
+# Send IR Power key to TV
+tuya_cli TV Power
+
+# Send IR PowerOn to Light
+tuya_cli Light PowerOn
+
+# Turn on LightNew via DPS
+tuya_cli LightNew switch_led true
+
+# Set LightNew brightness to 500
+tuya_cli LightNew bright_value 500
+
+# Connect to a different server
+tuya_cli -s http://192.168.1.50:8080 list
+```
+
+IR devices auto-detect and use `{"ir_key":"..."}` body; DPS devices use `{"dps":{"...":...}}`.
+
+### Separate build
+
+The CLI can also be built independently from its own directory:
+
+```bash
+cd cli
+cmake -S . -B build
+cmake --build build
+./build/tuya_cli list
+```
+
 ## IR Control Hub
 
 The server integrates with Tuya's **IR Control Hub Open Service** (`/v2.0/infrareds/`) to control infrared devices through a Smart IR hub.
@@ -315,6 +379,13 @@ curl -s "https://openapi.tuyaeu.com/v2.0/infrareds/{hub_id}/remotes"
 
 ```
 ├── CMakeLists.txt
+├── cli/                      # CLI client (independent build)
+│   ├── CMakeLists.txt
+│   ├── include/
+│   │   └── server_api.h
+│   └── src/
+│       ├── main.cpp
+│       └── server_api.cpp
 ├── config.json              # Template (committed, placeholders)
 ├── config.local.json        # Real credentials (gitignored)
 ├── include/

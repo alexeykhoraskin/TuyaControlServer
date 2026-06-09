@@ -36,6 +36,10 @@ if(CURL_FOUND)
     target_include_directories(fetch_devices PRIVATE ${CURL_INCLUDE_DIRS})
 endif()
 
+target_compile_definitions(tuya_control_server PRIVATE
+    TUYA_CONTROL_SERVER_VERSION="${PROJECT_VERSION}"
+)
+
 target_include_directories(tuya_control_server PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${OPENSSL_INCLUDE_DIR}
@@ -51,3 +55,6 @@ if(CURL_FOUND)
     target_link_libraries(tuya_control_server PRIVATE ${CURL_LIBRARIES})
     target_include_directories(tuya_control_server PRIVATE ${CURL_INCLUDE_DIRS})
 endif()
+
+# ── CLI client ──
+add_subdirectory(cli)

@@ -80,10 +80,9 @@ void ControlServer::server_loop() {
             std::string req(buf);
             std::string resp;
 
-            // Route
-            if (req.find("GET /devices") != std::string::npos &&
-                req.find("/ir-keys") == std::string::npos &&
-                req.find("/commands") == std::string::npos) {
+            // Route — order matters: more specific paths first
+            if (req.find("GET /devices ") != std::string::npos ||
+                req == "GET /devices HTTP/1.1\r\n") {
                 resp = RESP_OK;
                 auto devices = mgr_->list_devices();
                 std::string json = "{\"devices\":[";
@@ -146,10 +145,11 @@ void ControlServer::server_loop() {
                     std::string json = RESP_OK;
                     json += "{\"keys\":[";
                     bool first = true;
-                    for (auto& [k, v] : *keys) {
+                    for (auto& ki : *keys) {
                         if (!first) json += ",";
                         first = false;
-                        json += "{\"key_name\":\"" + k + "\",\"key_id\":\"" + v + "\"}";
+                        json += "{\"key_name\":\"" + ki.key + "\",\"key_id\":\"" + std::to_string(ki.key_id) +
+                                "\",\"standard\":" + (ki.standard ? "true" : "false") + "}";
                     }
                     json += "]}";
                     resp = json;
@@ -165,13 +165,18 @@ void ControlServer::server_loop() {
 
                 auto dev = mgr_->get_device(id);
                 if (dev) {
+                    // Query status if cache is empty (e.g. sensors)
+                    if (dev->dps.empty())
+                        mgr_->query_status(id);
+
                     std::string json = RESP_OK;
                     json += "{\"id\":\"" + dev->info.id + "\","
                             "\"ip\":\"" + dev->info.ip + "\","
                             "\"name\":\"" + dev->info.name + "\","
                             "\"version\":\"" + dev->info.version + "\","
                             "\"mode\":\"" + (dev->mode == ConnMode::LOCAL_V34 ? "v3.4" :
-                                             dev->mode == ConnMode::LOCAL_V2 ? "v2" : "none") + "\","
+                                             dev->mode == ConnMode::LOCAL_V2 ? "v2" :
+                                             dev->mode == ConnMode::CLOUD ? "cloud" : "none") + "\","
                             "\"online\":" + (dev->info.online ? "true" : "false") + ","
                             "\"dps\":{";
 

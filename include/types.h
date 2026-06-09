@@ -74,6 +74,13 @@ enum class ConnMode {
     CLOUD
 };
 
+// ── Infrared key info ──
+struct IrKeyInfo {
+    std::string key;        // key name (e.g. "Power", "power")
+    int         key_id = 0; // numeric key ID
+    bool        standard = false; // true → /command, false → /raw/command
+};
+
 // ── Command info for listing available commands ──
 struct CommandInfo {
     std::string name;       // code/function name

@@ -7,6 +7,7 @@
 #include "config.h"
 #include <iostream>
 #include <csignal>
+#include <cstring>
 #include <unistd.h>
 #include <sys/stat.h>
 
@@ -22,10 +23,44 @@ static bool file_exists(const std::string& path) {
     return stat(path.c_str(), &st) == 0;
 }
 
+static void print_help(const char* prog) {
+    std::cout << "TuyaControlServer v" << TUYA_CONTROL_SERVER_VERSION << std::endl;
+    std::cout << std::endl;
+    std::cout << "Usage: " << prog << " [options] [config_path]" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Options:" << std::endl;
+    std::cout << "  -h, --help    Show this help" << std::endl;
+    std::cout << "  -v, --version Show version" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Config lookup order:" << std::endl;
+    std::cout << "  1. CLI argument (path to JSON file)" << std::endl;
+    std::cout << "  2. config.local.json (gitignored, local overrides)" << std::endl;
+    std::cout << "  3. config.json (default template, committed)" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Endpoints:" << std::endl;
+    std::cout << "  GET  /devices              List all devices" << std::endl;
+    std::cout << "  GET  /devices/{id}         Device detail with DPS" << std::endl;
+    std::cout << "  POST /devices/{id}/command Send command" << std::endl;
+    std::cout << "  GET  /devices/{id}/keys    List IR keys" << std::endl;
+    std::cout << "  GET  /devices/{id}/commands List available commands" << std::endl;
+    std::cout << "  GET  /api/status           Health check" << std::endl;
+}
+
 int main(int argc, char** argv) {
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            print_help(argv[0]);
+            return 0;
+        }
+        if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version")) {
+            std::cout << TUYA_CONTROL_SERVER_VERSION << std::endl;
+            return 0;
+        }
+    }
+
     // Precedence: CLI arg > config.local.json > config.json
     std::string config_path;
-    if (argc > 1) {
+    if (argc > 1 && argv[1][0] != '-') {
         config_path = argv[1];
     } else if (file_exists("config.local.json")) {
         config_path = "config.local.json";

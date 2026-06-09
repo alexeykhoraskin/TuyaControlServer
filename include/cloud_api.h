@@ -28,7 +28,7 @@ public:
                          const std::string& key);
 
     // List available infrared keys for a remote
-    std::optional<std::vector<std::pair<std::string, std::string>>>
+    std::optional<std::vector<IrKeyInfo>>
     list_ir_keys(const std::string& hub_device_id,
                  const std::string& remote_id);
 

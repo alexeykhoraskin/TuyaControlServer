@@ -41,7 +41,7 @@ public:
     bool send_command(const std::string& id, const DpsMap& dps);
 
     // List IR keys for an infrared device
-    std::optional<std::vector<std::pair<std::string, std::string>>>
+    std::optional<std::vector<IrKeyInfo>>
     list_ir_keys(const std::string& id);
 
     // List all available commands for a device (IR keys or DPS codes)

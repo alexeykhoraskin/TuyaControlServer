@@ -311,6 +311,48 @@ cmake --build build
 ./build/tuya_cli list
 ```
 
+## MCP server (AI agents)
+
+The `mcp-tuya-py/` directory contains an **MCP (Model Context Protocol) server** that exposes Tuya device control as tools for AI agents (Claude Code, Cursor, Windsurf, etc.).
+
+### Setup
+
+```bash
+cd mcp-tuya-py
+pip install -r requirements.txt
+python server.py --server http://localhost:8080
+```
+
+### Available tools
+
+| Tool | Description |
+|------|-------------|
+| `list_devices` | List all devices with mode, type (IR/DPS), online status |
+| `get_device_status` | Get detailed status with DPS values by device name |
+| `send_command` | Send IR key or DPS command (auto-detects IR vs DPS) |
+| `list_commands` | List available commands for a device |
+
+### Configure in AI agent
+
+**Claude Code** (`claude.json`):
+```json
+{
+  "mcpServers": {
+    "tuya": {
+      "command": "python3",
+      "args": ["/path/to/mcp-tuya-py/server.py"]
+    }
+  }
+}
+```
+
+**Cursor** → Settings → MCP Servers → Add:
+```
+python3 /path/to/mcp-tuya-py/server.py
+```
+
+The agent can then use natural language like *"turn off the TV"*, *"what's the temperature?"*, or *"list all devices"`.
+
 ## IR Control Hub
 
 The server integrates with Tuya's **IR Control Hub Open Service** (`/v2.0/infrareds/`) to control infrared devices through a Smart IR hub.
@@ -386,6 +428,9 @@ curl -s "https://openapi.tuyaeu.com/v2.0/infrareds/{hub_id}/remotes"
 │   └── src/
 │       ├── main.cpp
 │       └── server_api.cpp
+├── mcp-tuya-py/              # MCP server for AI agents
+│   ├── requirements.txt
+│   └── server.py
 ├── config.json              # Template (committed, placeholders)
 ├── config.local.json        # Real credentials (gitignored)
 ├── include/

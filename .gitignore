@@ -73,6 +73,10 @@ STATUS.md
 # Agent state (local only, not for public)
 .opencode/
 
+# Python cache
+__pycache__/
+*.pyc
+
 # test output & cache
 Testing/
 .cache/

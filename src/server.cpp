@@ -251,7 +251,12 @@ void ControlServer::server_loop() {
                             vstart++;
                             while (vstart < dps_json.size() && dps_json[vstart] == ' ') vstart++;
                             if (dps_json[vstart] == '"') {
-                                auto vend = dps_json.find('"', vstart + 1);
+                                size_t vend = vstart + 1;
+                                while (vend < dps_json.size()) {
+                                    if (dps_json[vend] == '\\') vend += 2;
+                                    else if (dps_json[vend] == '"') break;
+                                    else vend++;
+                                }
                                 cmds[key] = dps_json.substr(vstart + 1, vend - vstart - 1);
                                 pos = vend + 1;
                             } else if (dps_json.substr(vstart, 4) == "true") {
